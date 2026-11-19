@@ -9,13 +9,18 @@ const API = "https://taskmanagement-cayp.onrender.com/tasks";
 function App() {
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const loadTasks = async () => {
     try {
-      const res = await axios.get(API);
-      setTasks(res.data);
-    } catch (error) {
-      console.log("Backend is not connected yet.");
+      setError("");
+      const response = await axios.get(API);
+      setTasks(response.data);
+    } catch (err) {
+      setError("Unable to load tasks. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -23,101 +28,167 @@ function App() {
     loadTasks();
   }, []);
 
-  const addTask = async () => {
+  const addTask = async (e) => {
+    e.preventDefault();
+
     if (!title.trim()) {
-      alert("Please enter a task");
+      alert("Please enter a task title");
       return;
     }
 
     try {
-      await axios.post(API, { title });
+      await axios.post(API, { title: title.trim() });
       setTitle("");
-      loadTasks();
-    } catch (error) {
-      alert("Start the backend server first.");
+      await loadTasks();
+    } catch (err) {
+      alert("Unable to add task. Please try again.");
     }
   };
 
   const updateStatus = async (id, status) => {
-    await axios.patch(`${API}/${id}`, { status });
-    loadTasks();
+    try {
+      await axios.patch(`${API}/${id}`, { status });
+      await loadTasks();
+    } catch (err) {
+      alert("Unable to update task.");
+    }
   };
 
   const deleteTask = async (id) => {
-    await axios.delete(`${API}/${id}`);
-    loadTasks();
+    if (!window.confirm("Are you sure you want to delete this task?")) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API}/${id}`);
+      await loadTasks();
+    } catch (err) {
+      alert("Unable to delete task.");
+    }
   };
 
   const statuses = ["Pending", "Ongoing", "Completed"];
 
   return (
-    <div className="container py-5">
-      <h1 className="text-center mb-4">
-        Project Task Management
-      </h1>
+    <div className="app-container">
+      <div className="container py-5">
+        <div className="text-center mb-5">
+          <h1 className="main-title">Project Task Management</h1>
+          <p className="subtitle">
+            Organize your work and track your progress
+          </p>
+        </div>
 
-      <div className="input-group mb-4">
-        <input
-          className="form-control"
-          placeholder="Enter task title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <button className="btn btn-primary" onClick={addTask}>
-          Add Task
-        </button>
-      </div>
+        <div className="task-form card shadow-sm p-4 mb-5">
+          <form onSubmit={addTask}>
+            <label className="form-label fw-semibold">
+              Create a New Task
+            </label>
 
-      <div className="row">
-        {statuses.map((status) => (
-          <div className="col-md-4 mb-3" key={status}>
-            <div className="card shadow h-100">
-              <div className="card-header bg-primary text-white">
-                {status} Tasks
-              </div>
+            <div className="input-group">
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Enter your task title..."
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
 
-              <div className="card-body">
-                {tasks
-                  .filter((task) => task.status === status)
-                  .map((task) => (
-                    <div className="border rounded p-3 mb-3" key={task._id}>
-                      <h5>{task.title}</h5>
-                      <p>Status: {task.status}</p>
-
-                      {status !== "Ongoing" && (
-                        <button
-                          className="btn btn-info btn-sm me-2 mb-2"
-                          onClick={() => updateStatus(task._id, "Ongoing")}
-                        >
-                          Ongoing
-                        </button>
-                      )}
-
-                      {status !== "Completed" && (
-                        <button
-                          className="btn btn-success btn-sm me-2 mb-2"
-                          onClick={() => updateStatus(task._id, "Completed")}
-                        >
-                          Complete
-                        </button>
-                      )}
-
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => deleteTask(task._id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ))}
-
-                {tasks.filter((task) => task.status === status).length === 0 && (
-                  <p className="text-muted">No tasks available.</p>
-                )}
-              </div>
+              <button className="btn btn-primary px-4" type="submit">
+                + Add Task
+              </button>
             </div>
-          </div>
-        ))}
+          </form>
+        </div>
+
+        {loading && (
+          <p className="text-center">Loading tasks...</p>
+        )}
+
+        {error && (
+          <div className="alert alert-danger">{error}</div>
+        )}
+
+        <div className="row g-4">
+          {statuses.map((status) => {
+            const filteredTasks = tasks.filter(
+              (task) => task.status === status
+            );
+
+            return (
+              <div className="col-md-4" key={status}>
+                <div className={`task-column ${status.toLowerCase()}`}>
+                  <div className="column-heading">
+                    <h5>{status}</h5>
+                    <span className="task-count">
+                      {filteredTasks.length}
+                    </span>
+                  </div>
+
+                  <div className="task-list">
+                    {filteredTasks.map((task) => (
+                      <div className="task-card" key={task._id}>
+                        <h6>{task.title}</h6>
+
+                        <span className={`status-label ${status.toLowerCase()}`}>
+                          {task.status}
+                        </span>
+
+                        <div className="task-actions">
+                          {status !== "Pending" && (
+                            <button
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={() =>
+                                updateStatus(task._id, "Pending")
+                              }
+                            >
+                              Pending
+                            </button>
+                          )}
+
+                          {status !== "Ongoing" && (
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() =>
+                                updateStatus(task._id, "Ongoing")
+                              }
+                            >
+                              Ongoing
+                            </button>
+                          )}
+
+                          {status !== "Completed" && (
+                            <button
+                              className="btn btn-sm btn-outline-success"
+                              onClick={() =>
+                                updateStatus(task._id, "Completed")
+                              }
+                            >
+                              Complete
+                            </button>
+                          )}
+
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => deleteTask(task._id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {!loading && filteredTasks.length === 0 && (
+                      <p className="empty-message">
+                        No tasks available.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -7,62 +8,50 @@ const cors = require("cors");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(
-  cors({
-    origin: [
-      "http://localhost:3000",
-      "http://localhost:5173",
-      process.env.CLIENT_URL,
-    ].filter(Boolean),
-  })
-);
+app.use(cors({
+  origin: [
+    "http://localhost:3000",
+    process.env.CLIENT_URL
+  ].filter(Boolean)
+}));
+
 app.use(express.json());
 
-// Connect to MongoDB
-mongoose
-  .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/taskmanager")
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.log("MongoDB connection error:", err));
+  .catch((err) => console.error("MongoDB error:", err));
 
-// Task Schema and Model
-const taskSchema = new mongoose.Schema(
-  {
-    title: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    status: {
-      type: String,
-      enum: ["Pending", "Ongoing", "Completed"],
-      default: "Pending"
-    }
+const taskSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true,
+    trim: true
   },
-  { timestamps: true }
-);
+  status: {
+    type: String,
+    enum: ["Pending", "Ongoing", "Completed"],
+    default: "Pending"
+  }
+}, { timestamps: true });
 
 const Task = mongoose.model("Task", taskSchema);
 
-// Test route
 app.get("/", (req, res) => {
   res.send("Project Task Management API is running!");
 });
 
-// Get all tasks
 app.get("/tasks", async (req, res) => {
   try {
-    const tasks = await Task.find();
+    const tasks = await Task.find().sort({ createdAt: -1 });
     res.json(tasks);
   } catch (err) {
     res.status(500).json({ message: "Could not fetch tasks" });
   }
 });
 
-// Add a new task
 app.post("/tasks", async (req, res) => {
   try {
-    const { title } = req.body;
+    const title = req.body.title;
 
     if (!title || !title.trim()) {
       return res.status(400).json({
@@ -70,46 +59,42 @@ app.post("/tasks", async (req, res) => {
       });
     }
 
-    const newTask = await Task.create({ title });
-    res.status(201).json(newTask);
+    const task = await Task.create({ title: title.trim() });
+    res.status(201).json(task);
   } catch (err) {
-    res.status(400).json({ message: "Could not create task" });
+    res.status(500).json({ message: "Could not create task" });
   }
 });
 
-// Update task status
 app.patch("/tasks/:id", async (req, res) => {
   try {
     const { status } = req.body;
 
     if (!["Pending", "Ongoing", "Completed"].includes(status)) {
-      return res.status(400).json({
-        message: "Invalid task status"
-      });
+      return res.status(400).json({ message: "Invalid status" });
     }
 
-    const updatedTask = await Task.findByIdAndUpdate(
+    const task = await Task.findByIdAndUpdate(
       req.params.id,
       { status },
       { new: true, runValidators: true }
     );
 
-    if (!updatedTask) {
+    if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
 
-    res.json(updatedTask);
+    res.json(task);
   } catch (err) {
     res.status(400).json({ message: "Could not update task" });
   }
 });
 
-// Delete a task
 app.delete("/tasks/:id", async (req, res) => {
   try {
-    const deletedTask = await Task.findByIdAndDelete(req.params.id);
+    const task = await Task.findByIdAndDelete(req.params.id);
 
-    if (!deletedTask) {
+    if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
 
@@ -119,7 +104,6 @@ app.delete("/tasks/:id", async (req, res) => {
   }
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
